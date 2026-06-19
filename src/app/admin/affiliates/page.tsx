@@ -28,7 +28,11 @@ const NOTICES: Record<string, { tone: "ok" | "err"; text: string }> = {
   },
   exists: {
     tone: "err",
-    text: "Could not create that account — the email may already be in use.",
+    text: "That email is already in use by another account.",
+  },
+  signup: {
+    tone: "err",
+    text: "Could not create that account — sign-up was rejected. Please try again.",
   },
 };
 

@@ -43,10 +43,25 @@ export async function createAffiliateAccount(formData: FormData) {
     const origin = await getRequestOrigin();
     const res = await fetch(`${origin}/api/auth/sign-up/email`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Better Auth's CSRF guard rejects requests whose Origin isn't a
+        // trusted origin. A server-side fetch sends no Origin by default, which
+        // it treats as a forgery (403 MISSING_OR_NULL_ORIGIN). Send our own
+        // origin explicitly — it matches trustedOrigins (BETTER_AUTH_URL).
+        Origin: origin,
+      },
       body: JSON.stringify({ name, email, password }),
     });
-    if (!res.ok) redirect("/admin/affiliates?error=exists");
+    if (!res.ok) {
+      // Surface the real reason instead of always blaming a duplicate email.
+      const code = await res
+        .json()
+        .then((b) => (b as { code?: string }).code)
+        .catch(() => undefined);
+      const reason = code === "USER_ALREADY_EXISTS" ? "exists" : "signup";
+      redirect(`/admin/affiliates?error=${reason}`);
+    }
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
