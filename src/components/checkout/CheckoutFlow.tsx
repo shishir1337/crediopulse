@@ -8,9 +8,10 @@ import {
   Eye,
   EyeOff,
   Info,
+  Loader2,
   Lock,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Logo from "@/components/landing/Logo";
 import { provisionCustomerAccount } from "@/lib/actions/customer";
 import { type BillingCycle, type Plan, priceFor, totalDue } from "@/lib/plans";
@@ -164,8 +165,8 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 
 // Hosted Stripe payment page. Submitting checkout sends the customer here to
 // actually pay — checkout is not marked complete until payment succeeds.
-// const STRIPE_PAYMENT_URL = "https://buy.stripe.com/eVq3cx5C47VDeBb9rN1Fe01";
-const STRIPE_PAYMENT_URL = "https://buy.stripe.com/test_14A4gy0J56n8dP08BM0gw00";
+const STRIPE_PAYMENT_URL = "https://buy.stripe.com/eVq3cx5C47VDeBb9rN1Fe01";
+// const STRIPE_PAYMENT_URL = "https://buy.stripe.com/test_14A4gy0J56n8dP08BM0gw00";
 
 type CheckoutFlowProps = {
   plan: Plan;
@@ -187,6 +188,18 @@ export default function CheckoutFlow({
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showSsn, setShowSsn] = useState(false);
+
+  // Brief spinner on the step-1 button while advancing to step 2.
+  const [advancing, setAdvancing] = useState(false);
+
+  // After the Stripe redirect, show a short "finalizing" screen before the
+  // confirmation + score (payment is already verified server-side).
+  const [finalizing, setFinalizing] = useState(paymentConfirmed);
+  useEffect(() => {
+    if (!paymentConfirmed) return;
+    const t = setTimeout(() => setFinalizing(false), 1400);
+    return () => clearTimeout(t);
+  }, [paymentConfirmed]);
 
   // Whether the customer account was created + logged in after submit.
   const [accountReady, setAccountReady] = useState(false);
@@ -256,10 +269,14 @@ export default function CheckoutFlow({
 
   function handleAccountSubmit(ev: React.FormEvent) {
     ev.preventDefault();
-    if (validateAccount()) {
+    if (!validateAccount()) return;
+    // Tiny pause so the transition to step 2 feels deliberate, not jumpy.
+    setAdvancing(true);
+    setTimeout(() => {
       setStep(2);
+      setAdvancing(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    }, 600);
   }
 
   // Runs before completing checkout: validate the identity fields the bureaus
@@ -316,12 +333,16 @@ export default function CheckoutFlow({
 
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
         {step === 3 ? (
-          <Confirmation
-            plan={plan}
-            cycle={cycle}
-            email={confirmedEmail || values.email}
-            accountReady={accountReady}
-          />
+          finalizing ? (
+            <FinalizingScreen />
+          ) : (
+            <Confirmation
+              plan={plan}
+              cycle={cycle}
+              email={confirmedEmail || values.email}
+              accountReady={accountReady}
+            />
+          )
         ) : (
           <>
             <Stepper step={step} />
@@ -495,7 +516,7 @@ export default function CheckoutFlow({
                       </p>
                     </div>
 
-                    <SubmitButton>
+                    <SubmitButton loading={advancing}>
                       Agree &amp; Next
                       <ArrowRight className="h-4.5 w-4.5" />
                     </SubmitButton>
@@ -609,9 +630,10 @@ export default function CheckoutFlow({
                         now. Swap PaymentStep's fields for the provider's hosted
                         card fields once a processor is integrated. */}
                     <PaymentStep
-                      amountLabel={money(totalDue(plan, cycle))}
                       onComplete={(card) => {
-                        if (prepareForPayment()) handleComplete(card);
+                        if (!prepareForPayment()) return false;
+                        handleComplete(card);
+                        return true;
                       }}
                     />
                   </div>
@@ -652,11 +674,11 @@ type CardErrors = Partial<Record<keyof CardValues, string>>;
 // so raw card data never touches this app. The submit button also runs identity
 // validation (via onComplete) before continuing.
 function PaymentStep({
-  amountLabel,
   onComplete,
 }: {
-  amountLabel: string;
-  onComplete: (card: CardValues) => void;
+  // Returns true if checkout proceeded (identity valid + payment opened),
+  // false if it was blocked — so the button knows whether to show a spinner.
+  onComplete: (card: CardValues) => boolean;
 }) {
   const [card, setCard] = useState<CardValues>({
     name: "",
@@ -665,6 +687,7 @@ function PaymentStep({
     cvc: "",
   });
   const [cardErrors, setCardErrors] = useState<CardErrors>({});
+  const [submitting, setSubmitting] = useState(false);
 
   const setCardField = <K extends keyof CardValues>(
     key: K,
@@ -689,7 +712,13 @@ function PaymentStep({
     <form
       onSubmit={(ev) => {
         ev.preventDefault();
-        if (validateCard()) onComplete(card);
+        if (submitting || !validateCard()) return;
+        // Open Stripe synchronously inside onComplete (keeps it within the
+        // click gesture so the popup isn't blocked); the spinner is just brief
+        // feedback. We stay on this tab, so clear it shortly after.
+        if (!onComplete(card)) return;
+        setSubmitting(true);
+        setTimeout(() => setSubmitting(false), 1500);
       }}
     >
       <Section title="Payment details">
@@ -773,9 +802,9 @@ function PaymentStep({
         </p>
       </Section>
 
-      <SubmitButton>
+      <SubmitButton loading={submitting}>
         <Lock className="h-4.5 w-4.5" />
-        Complete · {amountLabel}
+        Continue
       </SubmitButton>
     </form>
   );
@@ -1018,18 +1047,47 @@ function InfoTip({ text }: { text: string }) {
 function SubmitButton({
   children,
   disabled,
+  loading,
 }: {
   children: React.ReactNode;
   disabled?: boolean;
+  loading?: boolean;
 }) {
   return (
     <button
       type="submit"
-      disabled={disabled}
+      disabled={disabled || loading}
       className="press mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3.5 text-base font-semibold text-white shadow-[0_14px_40px_-12px_rgba(23,78,240,0.9)] hover:-translate-y-0.5 hover:bg-brand-500 hover:shadow-[0_20px_50px_-12px_rgba(23,78,240,1)] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:w-auto sm:min-w-64"
     >
-      {children}
+      {loading ? (
+        <>
+          <Loader2 className="h-4.5 w-4.5 animate-spin" />
+          Please wait…
+        </>
+      ) : (
+        children
+      )}
     </button>
+  );
+}
+
+// Shown for a beat after the Stripe redirect, before the confirmation + score.
+function FinalizingScreen() {
+  return (
+    <div className="mx-auto flex max-w-xl flex-col items-center py-16 text-center">
+      <div className="relative grid h-20 w-20 place-items-center">
+        <span className="absolute inset-0 animate-pulse-ring rounded-full bg-brand-500/20" />
+        <span className="relative grid h-20 w-20 place-items-center rounded-full bg-brand-50 text-brand-600">
+          <Loader2 className="h-9 w-9 animate-spin" />
+        </span>
+      </div>
+      <h1 className="mt-7 font-display text-2xl font-bold text-ink">
+        Finalizing your protection…
+      </h1>
+      <p className="mt-2 text-sm text-ink-soft">
+        Confirming your payment and preparing your credit dashboard.
+      </p>
+    </div>
   );
 }
 
