@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import CheckoutFlow from "@/components/checkout/CheckoutFlow";
 import { getPlan, normalizeCycle } from "@/lib/plans";
-import { retrieveCheckoutSession } from "@/lib/stripe/server";
+import { confirmCheckoutSession } from "@/lib/stripe/server";
 
 export const metadata: Metadata = {
   title: "Get Protected — Create Your Account",
@@ -22,10 +22,11 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   const { plan, cycle, session_id } = await searchParams;
 
   // When Stripe redirects back with ?session_id=cs_..., confirm the payment
-  // server-side. Only a genuinely paid session unlocks the confirmation page.
+  // server-side (this also records the affiliate conversion from the attribution
+  // cookie). Only a genuinely paid session unlocks the confirmation page.
   let confirmedEmail: string | null = null;
   if (session_id) {
-    const session = await retrieveCheckoutSession(session_id);
+    const session = await confirmCheckoutSession(session_id);
     if (session?.paid) confirmedEmail = session.email ?? "";
   }
 
