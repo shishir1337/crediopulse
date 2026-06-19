@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Stripe from "stripe";
 import { ATTR_COOKIE, decodeAttribution } from "@/lib/affiliate/attribution";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Server-side Stripe client. Uses the SDK's pinned API version
@@ -62,9 +63,43 @@ export async function confirmCheckoutSession(
   const email =
     session.customer_details?.email ?? session.customer_email ?? null;
 
-  if (paid) await recordSessionConversion(session);
+  if (paid) {
+    // Link the pre-payment checkout capture to the now-known customer, then
+    // credit the affiliate. Both are best-effort and independent.
+    await linkCheckoutDebug(session);
+    await recordSessionConversion(session);
+  }
 
   return { paid, email };
+}
+
+/** Stamps the now-known Stripe customer id onto this buyer's checkout-debug
+ * rows. The debug logger captures form data at submit — before any Stripe
+ * customer exists — so its rows have a null customer id and the admin
+ * conversion page (which matches by customer id) can't find them. Matching the
+ * buyer's email closes that gap. Best-effort; logged, never thrown. */
+async function linkCheckoutDebug(session: Stripe.Checkout.Session) {
+  try {
+    const email = session.customer_details?.email ?? session.customer_email;
+    const customerId =
+      typeof session.customer === "string"
+        ? session.customer
+        : (session.customer?.id ?? null);
+    if (!email || !customerId) return;
+
+    await prisma.checkoutDebug.updateMany({
+      where: {
+        email: { equals: email, mode: "insensitive" },
+        stripeCustomerId: null,
+      },
+      data: { stripeCustomerId: customerId },
+    });
+  } catch (error) {
+    console.error(
+      "[stripe] linkCheckoutDebug failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
 }
 
 /** Credits the attributed affiliate for a paid checkout session. No-op for an
