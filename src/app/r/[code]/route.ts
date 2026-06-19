@@ -5,6 +5,7 @@ import {
   encodeAttribution,
   VID_COOKIE,
 } from "@/lib/affiliate/attribution";
+import { originFromHeaders } from "@/lib/base-url";
 import { getSettings } from "@/lib/affiliate/settings";
 import { auth } from "@/lib/auth";
 import { type ClickContext, scoreClick } from "@/lib/fraud/engine";
@@ -31,7 +32,9 @@ export async function GET(
   { params }: { params: Promise<{ code: string }> },
 ) {
   const { code } = await params;
-  const origin = request.nextUrl.origin;
+  // Use the proxy-forwarded host so redirects keep the real public domain
+  // (crediopulse.com) instead of the internal localhost:3000 Next.js sees.
+  const origin = originFromHeaders(request.headers) ?? request.nextUrl.origin;
 
   // Resolve the code: an AffiliateLink, or an affiliate's default refCode.
   const link = await prisma.affiliateLink.findUnique({
