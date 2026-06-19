@@ -7,16 +7,11 @@ import { type BillingCycle, type Plan, priceFor, totalDue } from "@/lib/plans";
 type OrderSummaryProps = {
   plan: Plan;
   cycle: BillingCycle;
-  onCycleChange: (cycle: BillingCycle) => void;
 };
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
-export default function OrderSummary({
-  plan,
-  cycle,
-  onCycleChange,
-}: OrderSummaryProps) {
+export default function OrderSummary({ plan, cycle }: OrderSummaryProps) {
   const [expanded, setExpanded] = useState(true);
   const perMonth = priceFor(plan, cycle);
   const due = totalDue(plan, cycle);
@@ -38,29 +33,6 @@ export default function OrderSummary({
           </p>
           <p className="text-xs text-ink-soft">/mo</p>
         </div>
-      </div>
-
-      {/* Billing cycle toggle */}
-      <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-brand-50 p-1">
-        {(["monthly", "yearly"] as const).map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => onCycleChange(c)}
-            className={`rounded-lg px-3 py-2 text-sm font-semibold capitalize transition-colors ${
-              cycle === c
-                ? "bg-white text-brand-700 shadow-sm"
-                : "text-ink-soft hover:text-ink"
-            }`}
-          >
-            {c}
-            {c === "yearly" && (
-              <span className="ml-1.5 text-[0.7rem] font-bold text-meter-excellent">
-                -20%
-              </span>
-            )}
-          </button>
-        ))}
       </div>
 
       {/* Features */}

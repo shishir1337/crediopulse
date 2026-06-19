@@ -170,7 +170,6 @@ const STRIPE_PAYMENT_URL = "https://buy.stripe.com/eVq3cx5C47VDeBb9rN1Fe01";
 
 type CheckoutFlowProps = {
   plan: Plan;
-  initialCycle: BillingCycle;
   // Set (non-null) only after Stripe payment was confirmed server-side via
   // ?session_id=cs_.... Its presence starts the flow on the confirmation page.
   confirmedEmail?: string | null;
@@ -178,12 +177,12 @@ type CheckoutFlowProps = {
 
 export default function CheckoutFlow({
   plan,
-  initialCycle,
   confirmedEmail = null,
 }: CheckoutFlowProps) {
   const paymentConfirmed = confirmedEmail !== null;
   const [step, setStep] = useState<1 | 2 | 3>(paymentConfirmed ? 3 : 1);
-  const [cycle, setCycle] = useState<BillingCycle>(initialCycle);
+  // Billing is monthly-only — ignore any cycle the URL carries.
+  const cycle: BillingCycle = "monthly";
   const [values, setValues] = useState<Values>(INITIAL);
   const [errors, setErrors] = useState<Errors>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -642,11 +641,7 @@ export default function CheckoutFlow({
 
               <div className="order-1 lg:order-2">
                 <div className="lg:sticky lg:top-8">
-                  <OrderSummary
-                    plan={plan}
-                    cycle={cycle}
-                    onCycleChange={setCycle}
-                  />
+                  <OrderSummary plan={plan} cycle={cycle} />
                 </div>
               </div>
             </div>

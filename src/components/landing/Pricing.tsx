@@ -1,13 +1,11 @@
 "use client";
 
 import { Check, Sparkles } from "lucide-react";
-import { useState } from "react";
 import { PLANS } from "@/lib/plans";
 import Reveal from "./Reveal";
 
 export default function Pricing() {
-  const [yearly, setYearly] = useState(true);
-  const cycle = yearly ? "yearly" : "monthly";
+  const cycle = "monthly";
 
   return (
     <section
@@ -31,40 +29,10 @@ export default function Pricing() {
           </p>
         </Reveal>
 
-        {/* Toggle */}
-        <Reveal className="mt-9 flex items-center justify-center gap-4">
-          <span
-            className={`text-sm font-medium ${!yearly ? "text-white" : "text-white/50"}`}
-          >
-            Monthly
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={yearly}
-            onClick={() => setYearly((v) => !v)}
-            className="relative h-7 w-14 rounded-full bg-white/15 transition-colors duration-300 hover:bg-white/25"
-          >
-            <span
-              className={`absolute top-1 h-5 w-5 rounded-full bg-brand-400 shadow transition-all duration-300 ease-spring ${
-                yearly ? "left-8" : "left-1"
-              }`}
-            />
-          </button>
-          <span
-            className={`text-sm font-medium ${yearly ? "text-white" : "text-white/50"}`}
-          >
-            Yearly
-          </span>
-          <span className="rounded-full bg-meter-excellent/15 px-2.5 py-1 text-xs font-semibold text-meter-excellent">
-            Save 20%
-          </span>
-        </Reveal>
-
         {/* Plans */}
         <div className="mt-12 grid gap-5 lg:grid-cols-4">
           {PLANS.map((plan, i) => {
-            const price = yearly ? plan.yearly : plan.monthly;
+            const price = plan.monthly;
             return (
               <Reveal
                 key={plan.name}
@@ -90,9 +58,7 @@ export default function Pricing() {
                   </span>
                   <span className="mb-1 text-sm text-white/55">/mo</span>
                 </div>
-                <p className="mt-1 text-xs text-white/45">
-                  {yearly ? "billed annually" : "billed monthly"}
-                </p>
+                <p className="mt-1 text-xs text-white/45">billed monthly</p>
 
                 <a
                   href={`/signup?plan=${plan.id}&cycle=${cycle}`}

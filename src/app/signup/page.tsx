@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import CheckoutFlow from "@/components/checkout/CheckoutFlow";
-import { getPlan, normalizeCycle } from "@/lib/plans";
+import { getPlan } from "@/lib/plans";
 import { confirmCheckoutSession } from "@/lib/stripe/server";
 
 export const metadata: Metadata = {
@@ -19,7 +19,7 @@ type SignupPageProps = {
 };
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
-  const { plan, cycle, session_id } = await searchParams;
+  const { plan, session_id } = await searchParams;
 
   // When Stripe redirects back with ?session_id=cs_..., confirm the payment
   // server-side (this also records the affiliate conversion from the attribution
@@ -30,11 +30,5 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
     if (session?.paid) confirmedEmail = session.email ?? "";
   }
 
-  return (
-    <CheckoutFlow
-      plan={getPlan(plan)}
-      initialCycle={normalizeCycle(cycle)}
-      confirmedEmail={confirmedEmail}
-    />
-  );
+  return <CheckoutFlow plan={getPlan(plan)} confirmedEmail={confirmedEmail} />;
 }
