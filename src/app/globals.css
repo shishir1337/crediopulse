@@ -1,26 +1,227 @@
 @import "tailwindcss";
 
+/* ----------------------------------------------------------------------------
+   Credio Pulse — design tokens
+   A trustworthy fintech palette: midnight command-center navies, an electric
+   brand blue, and a credit-health meter spectrum (red → amber → green).
+---------------------------------------------------------------------------- */
+@theme {
+  /* Brand blue */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #d9e6ff;
+  --color-brand-200: #bcd3ff;
+  --color-brand-300: #8eb6ff;
+  --color-brand-400: #598dff;
+  --color-brand-500: #2f6bff;
+  --color-brand-600: #174ef0;
+  --color-brand-700: #133dcc;
+  --color-brand-800: #1635a3;
+  --color-brand-900: #183280;
+  --color-brand-950: #0f1d4d;
+
+  /* Midnight surfaces */
+  --color-navy-700: #1b2a52;
+  --color-navy-800: #111d3d;
+  --color-navy-900: #0a142d;
+  --color-navy-950: #060b1c;
+  --color-ink: #0b1220;
+  --color-ink-soft: #5b6577;
+
+  /* Credit-meter spectrum */
+  --color-meter-poor: #ef4444;
+  --color-meter-fair: #f59e0b;
+  --color-meter-good: #facc15;
+  --color-meter-great: #84cc16;
+  --color-meter-excellent: #22c55e;
+
+  --color-cyan-glow: #38e0ff;
+
+  /* Typography */
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+
+  /* Radii */
+  --radius-4xl: 2rem;
+  --radius-5xl: 2.75rem;
+
+  /* Motion */
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-float-slow: float 9s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 3s ease-out infinite;
+  --animate-sweep: sweep 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  --animate-fade-up: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  /* Easing — used across hovers & micro-interactions */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sweep {
+  from {
+    stroke-dashoffset: var(--sweep-from);
+  }
+  to {
+    stroke-dashoffset: var(--sweep-to);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reusable interaction timings — keep hovers smooth & consistent. */
+@utility card-hover {
+  transition-property: transform, box-shadow, border-color, background-color;
+  transition-timing-function: var(--ease-smooth);
+  transition-duration: 450ms;
+}
+
+@utility press {
+  transition-property:
+    transform, box-shadow, background-color, color, border-color, opacity;
+  transition-timing-function: var(--ease-smooth);
+  transition-duration: 260ms;
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: var(--color-ink);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Reveal-on-scroll helper (toggled by IntersectionObserver) */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must override Tailwind animation utilities for reduced-motion users */
+    animation-duration: 0.001ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must override Tailwind animation utilities for reduced-motion users */
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Atmospheric utilities */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+.bg-grid-dark {
+  background-image:
+    linear-gradient(to right, rgba(15, 29, 77, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 29, 77, 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+.text-gradient-brand {
+  background: linear-gradient(100deg, #8eb6ff 0%, #38e0ff 55%, #59f0c0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mask-fade-x {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 12%,
+    black 88%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 12%,
+    black 88%,
+    transparent
+  );
 }

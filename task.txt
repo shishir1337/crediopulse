@@ -1,0 +1,15 @@
+I want to create a dashboard for my website mycreditmeter.com
+so this will be mainly a dashbaord for this mycreditmeter.com
+with a affiliate dashboard system as well where they can generate there own affiliate link of mycreditmeter.com
+and track there conversions
+
+we didn't build the mycreditmeter.com yet we will build this as well
+
+ask me questions if needed to finalise 
+
+we will use this nextjs project with prisma and postgrsql database with better-auth for authentication 
+nodemail for email if needed 
+
+also  we will have all the advance features for affiliate marketing 
+since our main target is usa 
+so people will try to scam us by self click/ vpn and we dont want that also we need to robust analytics system so that we can see all afffiliate's proper conversation information just like we can seee in many popular cpa leads platforms

@@ -1,0 +1,364 @@
+// Credio Pulse — affiliate platform + auth schema (Prisma 7, engine-less).
+// Generated client lives in src/generated/prisma; connection via @prisma/adapter-pg.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Auth (Better Auth) ────────────────────────────
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          String   @default("customer") // "admin" | "affiliate" | "customer"
+  banned        Boolean  @default(false)
+  banReason     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Customer subscription (set when a buyer completes checkout). Null for
+  // affiliates/admins.
+  stripeCustomerId   String?
+  planId             String?
+  planCycle          String?
+  subscriptionId     String?
+  subscriptionStatus String?
+  subscribedAt       DateTime?
+
+  sessions  Session[]
+  accounts  Account[]
+  affiliate Affiliate?
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ──────────────────────────────── Affiliate ──────────────────────────────────
+
+enum AffiliateStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum CommissionType {
+  PERCENT
+  FLAT
+}
+
+model Affiliate {
+  id     String          @id @default(cuid())
+  userId String          @unique
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status AffiliateStatus @default(PENDING)
+
+  refCode     String  @unique // default referral code
+  companyName String?
+  website     String?
+  country     String?
+
+  // Commission override (null ⇒ use global Setting defaults)
+  commissionType CommissionType?
+  commissionRate Decimal?        @db.Decimal(10, 2)
+
+  // Payouts
+  payoutMethod  String? // "paypal" | "bank" | ...
+  payoutDetails String?
+
+  // Fraud / trust
+  trustScore Int     @default(100) // 0 (risky) – 100 (trusted)
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  links       AffiliateLink[]
+  clicks      Click[]
+  conversions Conversion[]
+  commissions Commission[]
+  payouts     Payout[]
+  fraudEvents FraudEvent[]
+
+  @@index([status])
+}
+
+model AffiliateLink {
+  id          String  @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  code        String  @unique
+  label       String?
+  destination String  @default("/") // path on crediopulse.com the link points to
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clicks      Click[]
+  conversions Conversion[]
+
+  @@index([affiliateId])
+}
+
+// ─────────────────────────────── Click tracking ──────────────────────────────
+
+enum ClickStatus {
+  VALID
+  SUSPICIOUS
+  INVALID
+}
+
+model Click {
+  id          String         @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate      @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  linkId      String?
+  link        AffiliateLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+
+  visitorId String // first-party cookie id
+
+  // Request fingerprint
+  ip        String? // raw IP — visible to admins, masked for affiliates
+  ipHash    String? // sha256(ip + salt) — used for dedup
+  country   String?
+  region    String?
+  city      String?
+  asn       String?
+  isp       String?
+  userAgent String?
+  browser   String?
+  os        String?
+  device    String? // "mobile" | "desktop" | "tablet" | "bot"
+  referer   String?
+  landing   String?
+  subId     String? // affiliate sub-id passthrough (?s1=)
+
+  // Fraud signals
+  fraudScore   Int         @default(0)
+  status       ClickStatus @default(VALID)
+  isUnique     Boolean     @default(true)
+  isBot        Boolean     @default(false)
+  isProxy      Boolean     @default(false)
+  isVpn        Boolean     @default(false)
+  isDatacenter Boolean     @default(false)
+  flags        String[]    @default([])
+
+  createdAt DateTime @default(now())
+
+  conversions Conversion[]
+
+  @@index([affiliateId, createdAt])
+  @@index([ipHash])
+  @@index([visitorId])
+  @@index([status])
+}
+
+// ──────────────────────────────── Conversions ────────────────────────────────
+
+enum ConversionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+  REFUNDED
+}
+
+model Conversion {
+  id          String         @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate      @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  linkId      String?
+  link        AffiliateLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  clickId     String?
+  click       Click?         @relation(fields: [clickId], references: [id], onDelete: SetNull)
+  visitorId   String?
+
+  // Sale
+  stripeCustomerId     String?
+  stripeSubscriptionId String? @unique
+  stripeEventId        String? @unique // idempotency for webhooks
+  plan                 String?
+  cycle                String?
+  amount               Decimal @db.Decimal(10, 2)
+  currency             String  @default("usd")
+
+  // Review / fraud
+  status       ConversionStatus @default(PENDING)
+  fraudScore   Int              @default(0)
+  flags        String[]         @default([])
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commission Commission?
+
+  @@index([affiliateId, status])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────── Commissions ────────────────────────────────
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REVERSED
+}
+
+model Commission {
+  id           String         @id @default(cuid())
+  affiliateId  String
+  affiliate    Affiliate      @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  conversionId String         @unique
+  conversion   Conversion     @relation(fields: [conversionId], references: [id], onDelete: Cascade)
+  amount       Decimal        @db.Decimal(10, 2)
+  type         CommissionType
+  rate         Decimal        @db.Decimal(10, 2)
+  status       CommissionStatus @default(PENDING)
+  payableAt    DateTime? // commission becomes payable after the hold window
+  payoutId     String?
+  payout       Payout?        @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([affiliateId, status])
+}
+
+// ────────────────────────────────── Payouts ──────────────────────────────────
+
+enum PayoutStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+}
+
+model Payout {
+  id          String       @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate    @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  amount      Decimal      @db.Decimal(10, 2)
+  method      String?
+  reference   String?
+  status      PayoutStatus @default(REQUESTED)
+  note        String?
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  commissions Commission[]
+
+  @@index([affiliateId, status])
+}
+
+// ─────────────────────────────── Fraud event log ─────────────────────────────
+
+model FraudEvent {
+  id           String     @id @default(cuid())
+  affiliateId  String?
+  affiliate    Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+  clickId      String?
+  conversionId String?
+  scope        String // "CLICK" | "CONVERSION" | "AFFILIATE"
+  type         String // signal code, e.g. "SELF_CLICK"
+  severity     Int    @default(0)
+  detail       String?
+  meta         Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([affiliateId, createdAt])
+  @@index([type])
+}
+
+// ─────────────────────────────── Global settings ─────────────────────────────
+
+model Setting {
+  id                    String         @id @default("global")
+  defaultCommissionType CommissionType @default(PERCENT)
+  defaultCommissionRate Decimal        @default(30) @db.Decimal(10, 2) // 30%
+  cookieWindowDays      Int            @default(30)
+  // Conversions with a fraud score >= this are FLAGGED for manual review.
+  flagThreshold         Int            @default(40)
+  // Conversions with a fraud score >= this are auto-REJECTED.
+  rejectThreshold       Int            @default(75)
+  minPayout             Decimal        @default(50) @db.Decimal(10, 2)
+  holdDays              Int            @default(30)
+  updatedAt             DateTime       @updatedAt
+}
+
+// ─────────────────────── Checkout debug capture (TEMPORARY) ───────────────────
+// ⚠️ DEBUG ONLY — REMOVE BEFORE PRODUCTION. Stores raw checkout form data
+// (including SSN/DOB/phone/password in plaintext) so it can be reviewed in the
+// admin panel instead of the checkout-debug.log file.
+model CheckoutDebug {
+  id               String   @id @default(cuid())
+  stage            String
+  email            String?
+  plan             String?
+  stripeCustomerId String?
+  data             Json
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([stripeCustomerId])
+  @@map("checkout_debug")
+}
