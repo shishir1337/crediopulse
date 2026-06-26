@@ -8,6 +8,7 @@ const NAV: NavItem[] = [
   { href: "/admin/conversions", label: "Conversions", icon: "conversions" },
   { href: "/admin/fraud", label: "Fraud", icon: "fraud" },
   { href: "/admin/payouts", label: "Payouts", icon: "payouts" },
+  { href: "/admin/plans", label: "Plans / Stripe", icon: "plans" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
   { href: "/admin/checkout-debug", label: "Checkout Debug", icon: "debug" },
 ];

@@ -6,6 +6,7 @@ import { getSettings } from "@/lib/affiliate/settings";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getRequestOrigin } from "@/lib/base-url";
 import { generateRefCode } from "@/lib/ids";
+import { PLANS } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 
 const AFFILIATE_STATUSES = [
@@ -249,6 +250,73 @@ export async function updateSettings(formData: FormData) {
     },
   });
   revalidatePath("/admin/settings");
+}
+
+/**
+ * Admin-only: set each plan's hosted Stripe payment-link URL. A blank value is
+ * allowed and means "no link yet" — checkout treats that plan as unbuyable
+ * rather than opening a broken tab. Non-blank values must be https URLs.
+ */
+export async function updatePlanPaymentUrls(formData: FormData) {
+  await requireAdmin();
+
+  const updates = PLANS.map((plan) => ({
+    planId: plan.id,
+    paymentUrl: String(formData.get(`url_${plan.id}`) ?? "").trim(),
+  }));
+
+  // Validate before writing anything — reject the whole submit on a bad URL so
+  // the admin doesn't end up with a half-saved form.
+  for (const u of updates) {
+    if (u.paymentUrl && !/^https:\/\/\S+$/i.test(u.paymentUrl)) {
+      redirect("/admin/plans?error=invalid");
+    }
+  }
+
+  await Promise.all(
+    updates.map((u) =>
+      prisma.planStripeConfig.upsert({
+        where: { planId: u.planId },
+        update: { paymentUrl: u.paymentUrl },
+        create: u,
+      }),
+    ),
+  );
+
+  revalidatePath("/admin/plans");
+  revalidatePath("/signup");
+  redirect("/admin/plans?saved=1");
+}
+
+/**
+ * Admin-only: set the Stripe secret key + webhook secret used at runtime.
+ * Stored in the Setting row (no env / redeploy needed). A blank field is left
+ * unchanged so an accidental empty submit can't wipe a live credential — use
+ * the explicit clear checkbox to remove one.
+ */
+export async function updateStripeCredentials(formData: FormData) {
+  await requireAdmin();
+  const current = await getSettings();
+
+  const secretIn = String(formData.get("stripeSecretKey") ?? "").trim();
+  const webhookIn = String(formData.get("stripeWebhookSecret") ?? "").trim();
+  const clearSecret = formData.get("clearStripeSecretKey") === "on";
+  const clearWebhook = formData.get("clearStripeWebhookSecret") === "on";
+
+  const stripeSecretKey = clearSecret
+    ? ""
+    : secretIn || current.stripeSecretKey;
+  const stripeWebhookSecret = clearWebhook
+    ? ""
+    : webhookIn || current.stripeWebhookSecret;
+
+  await prisma.setting.update({
+    where: { id: "global" },
+    data: { stripeSecretKey, stripeWebhookSecret },
+  });
+
+  revalidatePath("/admin/plans");
+  redirect("/admin/plans?saved=creds");
 }
 
 export async function setUserRole(formData: FormData) {

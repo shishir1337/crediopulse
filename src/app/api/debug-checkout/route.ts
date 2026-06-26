@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     // iframe — so this is the most card detail that can be captured.
     if (body.paymentIntentId) {
       try {
-        const pi = await getStripe().paymentIntents.retrieve(
+        const pi = await (await getStripe()).paymentIntents.retrieve(
           body.paymentIntentId,
           { expand: ["payment_method"] },
         );

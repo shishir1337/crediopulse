@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { ATTR_COOKIE, decodeAttribution } from "@/lib/affiliate/attribution";
 import { getPlan, normalizeCycle } from "@/lib/plans";
 import { priceIdFor } from "@/lib/stripe/prices";
@@ -11,9 +12,9 @@ import { getStripe } from "@/lib/stripe/server";
  * https://docs.stripe.com/billing/subscriptions/build-subscriptions
  */
 export async function POST(request: NextRequest) {
-  let stripe: ReturnType<typeof getStripe>;
+  let stripe: Stripe;
   try {
-    stripe = getStripe();
+    stripe = await getStripe();
   } catch {
     return NextResponse.json(
       { error: "Payments are not configured yet. Add your Stripe keys." },

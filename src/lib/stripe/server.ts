@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Stripe from "stripe";
 import { ATTR_COOKIE, decodeAttribution } from "@/lib/affiliate/attribution";
+import { getSettings } from "@/lib/affiliate/settings";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -8,20 +9,28 @@ import { prisma } from "@/lib/prisma";
  * (stripe@22 → 2026-05-27.dahlia), which supports flexible billing mode and
  * `latest_invoice.confirmation_secret`.
  *
- * Returns null when STRIPE_SECRET_KEY is not configured so callers can surface a
- * friendly "not configured" message instead of crashing.
+ * The secret key is stored in the DB (Setting row) and managed from
+ * /admin/plans — no env var or redeploy needed to change it. The client is
+ * rebuilt only when the key actually changes.
  */
-const secretKey = process.env.STRIPE_SECRET_KEY;
+let cached: { key: string; client: Stripe } | null = null;
 
-export const stripe: Stripe | null = secretKey ? new Stripe(secretKey) : null;
-
-export function getStripe(): Stripe {
-  if (!stripe) {
+/**
+ * Returns a Stripe client built from the secret key saved in the admin panel.
+ * Throws when no key is set so callers can surface a friendly "not configured"
+ * message instead of crashing.
+ */
+export async function getStripe(): Promise<Stripe> {
+  const { stripeSecretKey } = await getSettings();
+  if (!stripeSecretKey) {
     throw new Error(
-      "Stripe is not configured. Set STRIPE_SECRET_KEY in your environment.",
+      "Stripe is not configured. Add your secret key in Admin → Plans / Stripe.",
     );
   }
-  return stripe;
+  if (!cached || cached.key !== stripeSecretKey) {
+    cached = { key: stripeSecretKey, client: new Stripe(stripeSecretKey) };
+  }
+  return cached.client;
 }
 
 export type ConfirmedCheckout = {
@@ -45,7 +54,7 @@ export async function confirmCheckoutSession(
 ): Promise<ConfirmedCheckout | null> {
   let session: Stripe.Checkout.Session;
   try {
-    session = await getStripe().checkout.sessions.retrieve(sessionId);
+    session = await (await getStripe()).checkout.sessions.retrieve(sessionId);
   } catch (error) {
     // Most common cause: a test-mode session id (cs_test_...) looked up with a
     // live secret key (or vice-versa) — Stripe returns "No such checkout

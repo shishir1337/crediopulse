@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import CheckoutFlow from "@/components/checkout/CheckoutFlow";
 import { getPlan } from "@/lib/plans";
+import { getPlanPaymentUrl } from "@/lib/stripe/plan-config";
 import { confirmCheckoutSession } from "@/lib/stripe/server";
 
 export const metadata: Metadata = {
@@ -30,5 +31,15 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
     if (session?.paid) confirmedEmail = session.email ?? "";
   }
 
-  return <CheckoutFlow plan={getPlan(plan)} confirmedEmail={confirmedEmail} />;
+  const selectedPlan = getPlan(plan);
+  // The hosted Stripe payment link for this plan, managed from /admin/plans.
+  const paymentUrl = await getPlanPaymentUrl(selectedPlan.id);
+
+  return (
+    <CheckoutFlow
+      plan={selectedPlan}
+      paymentUrl={paymentUrl}
+      confirmedEmail={confirmedEmail}
+    />
+  );
 }

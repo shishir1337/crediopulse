@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { getSettings } from "@/lib/affiliate/settings";
 import { getStripe } from "@/lib/stripe/server";
 
 /**
@@ -11,7 +12,7 @@ import { getStripe } from "@/lib/stripe/server";
  * endpoint URL and STRIPE_WEBHOOK_SECRET as described in docs/STRIPE_SETUP.md.
  */
 export async function POST(request: NextRequest) {
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const { stripeWebhookSecret: webhookSecret } = await getSettings();
   if (!webhookSecret) {
     return NextResponse.json(
       { error: "Webhook secret not configured." },
@@ -19,9 +20,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let stripe: ReturnType<typeof getStripe>;
+  let stripe: Stripe;
   try {
-    stripe = getStripe();
+    stripe = await getStripe();
   } catch {
     return NextResponse.json(
       { error: "Stripe not configured." },

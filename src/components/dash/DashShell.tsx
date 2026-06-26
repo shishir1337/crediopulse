@@ -3,6 +3,7 @@
 import {
   Banknote,
   Bug,
+  CreditCard,
   LayoutDashboard,
   Link2,
   LogOut,
@@ -31,6 +32,7 @@ const ICONS = {
   payouts: Banknote,
   affiliates: Users,
   fraud: ShieldAlert,
+  plans: CreditCard,
   settings: SlidersHorizontal,
   debug: Bug,
 } as const;

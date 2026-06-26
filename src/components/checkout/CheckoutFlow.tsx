@@ -163,13 +163,12 @@ function ageFromDob(dob: string): number | null {
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
-// Hosted Stripe payment page. Submitting checkout sends the customer here to
-// actually pay — checkout is not marked complete until payment succeeds.
-const STRIPE_PAYMENT_URL = "https://buy.stripe.com/eVq3cx5C47VDeBb9rN1Fe01";
-// const STRIPE_PAYMENT_URL = "https://buy.stripe.com/test_14A4gy0J56n8dP08BM0gw00";
-
 type CheckoutFlowProps = {
   plan: Plan;
+  // Hosted Stripe payment link for this plan, managed from /admin/plans.
+  // Submitting checkout sends the customer here to actually pay — checkout is
+  // not marked complete until payment succeeds. Empty ⇒ plan not yet buyable.
+  paymentUrl: string;
   // Set (non-null) only after Stripe payment was confirmed server-side via
   // ?session_id=cs_.... Its presence starts the flow on the confirmation page.
   confirmedEmail?: string | null;
@@ -177,6 +176,7 @@ type CheckoutFlowProps = {
 
 export default function CheckoutFlow({
   plan,
+  paymentUrl,
   confirmedEmail = null,
 }: CheckoutFlowProps) {
   const paymentConfirmed = confirmedEmail !== null;
@@ -289,11 +289,14 @@ export default function CheckoutFlow({
   }
 
   function handleComplete(card: CardValues) {
+    // No payment link configured for this plan ⇒ nothing to open. The pay
+    // button is disabled in this case, so this is just a defensive guard.
+    if (!paymentUrl) return;
     // DEBUG ONLY — one consolidated entry with account + identity + card data.
     logCheckout("checkout-complete", card);
     // Don't mark checkout as completed here. Send the customer to the Stripe
     // payment page (new tab) to actually pay — completion happens after.
-    window.open(STRIPE_PAYMENT_URL, "_blank", "noopener,noreferrer");
+    window.open(paymentUrl, "_blank", "noopener,noreferrer");
     // Provision the account in the background so they can sign in after paying.
     void provisionCustomerAccount({
       email: values.email,
@@ -629,6 +632,7 @@ export default function CheckoutFlow({
                         now. Swap PaymentStep's fields for the provider's hosted
                         card fields once a processor is integrated. */}
                     <PaymentStep
+                      disabled={!paymentUrl}
                       onComplete={(card) => {
                         if (!prepareForPayment()) return false;
                         handleComplete(card);
@@ -670,10 +674,13 @@ type CardErrors = Partial<Record<keyof CardValues, string>>;
 // validation (via onComplete) before continuing.
 function PaymentStep({
   onComplete,
+  disabled = false,
 }: {
   // Returns true if checkout proceeded (identity valid + payment opened),
   // false if it was blocked — so the button knows whether to show a spinner.
   onComplete: (card: CardValues) => boolean;
+  // No Stripe payment link set for this plan ⇒ block submission.
+  disabled?: boolean;
 }) {
   const [card, setCard] = useState<CardValues>({
     name: "",
@@ -707,7 +714,7 @@ function PaymentStep({
     <form
       onSubmit={(ev) => {
         ev.preventDefault();
-        if (submitting || !validateCard()) return;
+        if (disabled || submitting || !validateCard()) return;
         // Open Stripe synchronously inside onComplete (keeps it within the
         // click gesture so the popup isn't blocked); the spinner is just brief
         // feedback. We stay on this tab, so clear it shortly after.
@@ -782,7 +789,10 @@ function PaymentStep({
               placeholder="123"
               value={card.cvc}
               onChange={(e) =>
-                setCardField("cvc", e.target.value.replace(/\D/g, "").slice(0, 4))
+                setCardField(
+                  "cvc",
+                  e.target.value.replace(/\D/g, "").slice(0, 4),
+                )
               }
               autoComplete="cc-csc"
               className={cls(cardErrors.cvc)}
@@ -797,7 +807,14 @@ function PaymentStep({
         </p>
       </Section>
 
-      <SubmitButton loading={submitting}>
+      {disabled && (
+        <p className="mt-6 rounded-xl border border-meter-fair/30 bg-meter-fair/10 px-4 py-3 text-sm font-medium text-[#b45309]">
+          This plan isn’t available for checkout right now. Please choose
+          another plan or contact support.
+        </p>
+      )}
+
+      <SubmitButton disabled={disabled} loading={submitting}>
         <Lock className="h-4.5 w-4.5" />
         Continue
       </SubmitButton>
